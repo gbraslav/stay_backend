@@ -48,7 +48,93 @@ swagger_template = {
             "name": "Health",
             "description": "API health and status"
         }
-    ]
+    ],
+    "definitions": {
+        "ErrorResponse": {
+            "type": "object",
+            "properties": {
+                "status": {
+                    "type": "string",
+                    "enum": ["error"],
+                    "example": "error"
+                },
+                "message": {
+                    "type": "string",
+                    "example": "Error description"
+                },
+                "error_type": {
+                    "type": "string",
+                    "example": "ValueError"
+                }
+            },
+            "required": ["status", "message"]
+        },
+        "OAuthToken": {
+            "type": "object",
+            "properties": {
+                "access_token": {
+                    "type": "string",
+                    "description": "OAuth2 access token",
+                    "example": "ya29.a0AfH6SMC..."
+                },
+                "refresh_token": {
+                    "type": "string",
+                    "description": "OAuth2 refresh token (optional)",
+                    "example": "1//04..."
+                },
+                "token_type": {
+                    "type": "string",
+                    "example": "Bearer"
+                },
+                "expires_in": {
+                    "type": "integer",
+                    "example": 3600
+                },
+                "scope": {
+                    "type": "string",
+                    "example": "https://www.googleapis.com/auth/gmail.readonly"
+                }
+            },
+            "required": ["access_token"]
+        },
+        "EmailSummary": {
+            "type": "object",
+            "properties": {
+                "id": {"type": "string", "example": "message_id_123"},
+                "sender": {"type": "string", "example": "sender@example.com"},
+                "subject": {"type": "string", "example": "Important Meeting"},
+                "date_received": {"type": "string", "format": "date-time"},
+                "priority": {"type": "string", "enum": ["high", "medium", "low"]},
+                "category": {"type": "string", "enum": ["work", "personal", "promotional", "notification", "other"]},
+                "summary": {"type": "string", "example": "Brief email summary"},
+                "action_required": {"type": "boolean"},
+                "has_attachments": {"type": "boolean"}
+            }
+        },
+        "EmailDetail": {
+            "type": "object",
+            "properties": {
+                "id": {"type": "string"},
+                "user_id": {"type": "string"},
+                "sender": {"type": "string"},
+                "recipient": {"type": "string"},
+                "subject": {"type": "string"},
+                "body_text": {"type": "string"},
+                "body_html": {"type": "string"},
+                "date_received": {"type": "string", "format": "date-time"},
+                "date_processed": {"type": "string", "format": "date-time"},
+                "sentiment": {"type": "string", "enum": ["positive", "neutral", "negative"]},
+                "priority": {"type": "string", "enum": ["high", "medium", "low"]},
+                "category": {"type": "string"},
+                "summary": {"type": "string"},
+                "action_required": {"type": "boolean"},
+                "thread_id": {"type": "string"},
+                "has_attachments": {"type": "boolean"},
+                "attachment_count": {"type": "integer"},
+                "labels": {"type": "string"}
+            }
+        }
+    }
 }
 
 swagger_config = {
@@ -165,4 +251,28 @@ oauth_token_schema = {
         }
     },
     "required": ["access_token"]
+}
+
+# Additional schemas needed for complete API documentation
+email_live_summary_schema = {
+    "type": "object",
+    "properties": {
+        "id": {"type": "string", "example": "1234567890abcdef"},
+        "sender": {"type": "string", "example": "sender@example.com"},
+        "subject": {"type": "string", "example": "Important Meeting"},
+        "date_received": {"type": "string", "format": "date-time", "example": "2024-09-11T10:30:00Z"},
+        "snippet": {"type": "string", "example": "Hi, let's schedule a meeting..."},
+        "has_attachments": {"type": "boolean", "example": False},
+        "labels": {"type": "string", "example": "INBOX,UNREAD"}
+    }
+}
+
+process_emails_request_schema = {
+    "type": "object",
+    "properties": {
+        "oauth_token": {"$ref": "#/definitions/OAuthToken"},
+        "days_back": {"type": "integer", "default": 7, "example": 7},
+        "max_emails": {"type": "integer", "default": 50, "example": 50}
+    },
+    "required": ["oauth_token"]
 }

@@ -191,9 +191,65 @@ def add_user():
 
 @api_bp.route('/process_emails', methods=['POST'])
 def process_emails():
-    """
-    Process emails for a user
-    POST /api/process_emails
+    """Process emails for a user with LLM analysis
+    ---
+    tags:
+      - Emails
+    parameters:
+      - in: body
+        name: request_data
+        description: OAuth token and processing parameters
+        required: true
+        schema:
+          type: object
+          properties:
+            oauth_token:
+              $ref: '#/definitions/OAuthToken'
+            days_back:
+              type: integer
+              default: 7
+              example: 7
+              description: Number of days to look back
+            max_emails:
+              type: integer
+              default: 50
+              example: 50
+              description: Maximum number of emails to process
+          required:
+            - oauth_token
+    responses:
+      200:
+        description: Emails processed successfully
+        schema:
+          type: object
+          properties:
+            status:
+              type: string
+              example: success
+            message:
+              type: string
+              example: "Processed 25 emails"
+            processed_count:
+              type: integer
+              example: 25
+            total_fetched:
+              type: integer
+              example: 30
+            errors_count:
+              type: integer
+              example: 0
+            processed_emails:
+              type: array
+              items:
+                $ref: '#/definitions/EmailSummary'
+      400:
+        description: Invalid request or missing OAuth token
+        schema:
+          $ref: '#/definitions/ErrorResponse'
+      500:
+        description: Internal server error
+        schema:
+          $ref: '#/definitions/ErrorResponse'
     """
     try:
         # Get request data
@@ -287,9 +343,113 @@ def process_emails():
 
 @api_bp.route('/emails', methods=['GET'])
 def get_emails():
-    """
-    Get live emails from Gmail API using stored tokens
-    GET /api/emails?user_email=user@example.com
+    """Get live emails from Gmail API using stored tokens
+    ---
+    tags:
+      - Emails
+    parameters:
+      - in: query
+        name: user_email
+        type: string
+        required: true
+        description: User's Gmail address
+        example: "user@gmail.com"
+      - in: query
+        name: sender
+        type: string
+        required: false
+        description: Filter by sender email
+        example: "boss@company.com"
+      - in: query
+        name: subject
+        type: string
+        required: false
+        description: Filter by subject keywords
+        example: "meeting"
+      - in: query
+        name: limit
+        type: integer
+        required: false
+        default: 50
+        description: Number of emails to return
+        example: 10
+      - in: query
+        name: days_back
+        type: integer
+        required: false
+        default: 7
+        description: Days to look back
+        example: 3
+    responses:
+      200:
+        description: Emails retrieved successfully
+        schema:
+          type: object
+          properties:
+            status:
+              type: string
+              example: success
+            emails:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    example: "1234567890abcdef"
+                  sender:
+                    type: string
+                    example: "sender@example.com"
+                  subject:
+                    type: string
+                    example: "Important Meeting"
+                  date_received:
+                    type: string
+                    format: date-time
+                    example: "2024-09-11T10:30:00Z"
+                  snippet:
+                    type: string
+                    example: "Hi, let's schedule a meeting..."
+                  has_attachments:
+                    type: boolean
+                    example: false
+                  labels:
+                    type: string
+                    example: "INBOX,UNREAD"
+            total_fetched:
+              type: integer
+              example: 25
+            source:
+              type: string
+              example: "gmail_api_live"
+            user_email:
+              type: string
+              example: "user@gmail.com"
+            filters_applied:
+              type: object
+              properties:
+                sender:
+                  type: string
+                  nullable: true
+                subject:
+                  type: string
+                  nullable: true
+                days_back:
+                  type: integer
+                limit:
+                  type: integer
+      400:
+        description: Invalid parameters
+        schema:
+          $ref: '#/definitions/ErrorResponse'
+      401:
+        description: No valid token found for user
+        schema:
+          $ref: '#/definitions/ErrorResponse'
+      500:
+        description: Internal server error
+        schema:
+          $ref: '#/definitions/ErrorResponse'
     """
     try:
         # Get query parameters
@@ -400,9 +560,53 @@ def get_emails():
 
 @api_bp.route('/emails/<email_id>', methods=['GET'])
 def get_email_details(email_id):
-    """
-    Get full details of a specific email from Gmail API
-    GET /api/emails/{email_id}?user_email=user@example.com
+    """Get full details of a specific email from Gmail API
+    ---
+    tags:
+      - Emails
+    parameters:
+      - in: path
+        name: email_id
+        type: string
+        required: true
+        description: Gmail message ID
+        example: "1234567890abcdef"
+      - in: query
+        name: user_email
+        type: string
+        required: true
+        description: User's Gmail address
+        example: "user@gmail.com"
+    responses:
+      200:
+        description: Email details retrieved successfully
+        schema:
+          type: object
+          properties:
+            status:
+              type: string
+              example: success
+            email:
+              $ref: '#/definitions/EmailDetail'
+            source:
+              type: string
+              example: "gmail_api_live"
+      400:
+        description: Missing required parameters
+        schema:
+          $ref: '#/definitions/ErrorResponse'
+      401:
+        description: No valid token found for user
+        schema:
+          $ref: '#/definitions/ErrorResponse'
+      404:
+        description: Email not found in Gmail or access denied
+        schema:
+          $ref: '#/definitions/ErrorResponse'
+      500:
+        description: Internal server error
+        schema:
+          $ref: '#/definitions/ErrorResponse'
     """
     try:
         # Get user email from query parameter
@@ -473,9 +677,59 @@ def get_email_details(email_id):
 
 @api_bp.route('/emails/summary', methods=['GET'])
 def get_emails_summary():
-    """
-    Get summary statistics for user's emails
-    GET /api/emails/summary
+    """Get summary statistics for user's processed emails
+    ---
+    tags:
+      - Emails
+    parameters:
+      - in: query
+        name: user_email
+        type: string
+        required: true
+        description: User's Gmail address
+        example: "user@gmail.com"
+    responses:
+      200:
+        description: Email summary retrieved successfully
+        schema:
+          type: object
+          properties:
+            status:
+              type: string
+              example: success
+            summary:
+              type: object
+              properties:
+                total_emails:
+                  type: integer
+                  example: 150
+                  description: Total number of processed emails
+                high_priority:
+                  type: integer
+                  example: 12
+                  description: Number of high priority emails
+                action_required:
+                  type: integer
+                  example: 8
+                  description: Number of emails requiring action
+                categories:
+                  type: object
+                  description: Email count by category
+                  additionalProperties:
+                    type: integer
+                  example:
+                    work: 80
+                    personal: 35
+                    promotional: 25
+                    social: 10
+      400:
+        description: Missing user_email parameter
+        schema:
+          $ref: '#/definitions/ErrorResponse'
+      500:
+        description: Internal server error
+        schema:
+          $ref: '#/definitions/ErrorResponse'
     """
     try:
         user_email = request.args.get('user_email')

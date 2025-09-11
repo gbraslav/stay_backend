@@ -80,17 +80,286 @@ uv run celery -A celery_worker.celery worker --loglevel=info
 
 ## API Endpoints
 
+### Health Check
+
+#### `GET /api/health`
+Check service health and status.
+
+**Response:**
+```json
+{
+  "status": "healthy",
+  "service": "stay_backend", 
+  "version": "1.0.0"
+}
+```
+
+**Example:**
+```bash
+curl http://localhost:5000/api/health
+```
+
+---
+
 ### Authentication
-- `POST /api/add_user` - Add user with OAuth2 token
 
-### Email Processing
-- `POST /api/process_emails` - Process user's emails
-- `GET /api/emails` - List processed emails with filtering
-- `GET /api/emails/{email_id}` - Get specific email details
-- `GET /api/emails/summary` - Get email statistics
+#### `POST /api/add_user`
+Store user's OAuth2 token for Gmail access. This must be called first before using other endpoints.
 
-### Health
-- `GET /api/health` - Service health check
+**Request Body:**
+```json
+{
+  "access_token": "ya29.a0AfH6SMC...",
+  "refresh_token": "1//04...",
+  "token_type": "Bearer",
+  "expires_in": 3600,
+  "scope": "https://www.googleapis.com/auth/gmail.readonly"
+}
+```
+
+**Response (Success):**
+```json
+{
+  "status": "success",
+  "message": "Gmail connection established successfully",
+  "user_email": "user@gmail.com",
+  "gmail_info": {
+    "total_messages": 1500,
+    "total_threads": 750
+  }
+}
+```
+
+**Response (Error):**
+```json
+{
+  "status": "error",
+  "message": "Invalid token: access_token is required"
+}
+```
+
+**Example:**
+```bash
+curl -X POST http://localhost:5000/api/add_user \
+  -H "Content-Type: application/json" \
+  -d '{
+    "access_token": "ya29.a0AfH6SMC...",
+    "refresh_token": "1//04...",
+    "token_type": "Bearer",
+    "expires_in": 3600,
+    "scope": "https://www.googleapis.com/auth/gmail.readonly"
+  }'
+```
+
+---
+
+### Email Retrieval (Live Gmail API)
+
+#### `GET /api/emails`
+Get live emails directly from Gmail API using stored tokens.
+
+**Query Parameters:**
+- `user_email` (required) - User's Gmail address
+- `sender` (optional) - Filter by sender email
+- `subject` (optional) - Filter by subject keywords
+- `limit` (optional) - Number of emails to return (default: 50)
+- `days_back` (optional) - Days to look back (default: 7)
+
+**Response:**
+```json
+{
+  "status": "success",
+  "emails": [
+    {
+      "id": "1234567890abcdef",
+      "sender": "sender@example.com",
+      "subject": "Important Meeting",
+      "date_received": "2024-09-11T10:30:00Z",
+      "snippet": "Hi, let's schedule a meeting...",
+      "has_attachments": false,
+      "labels": "INBOX,UNREAD"
+    }
+  ],
+  "total_fetched": 25,
+  "source": "gmail_api_live",
+  "user_email": "user@gmail.com",
+  "filters_applied": {
+    "sender": null,
+    "subject": null,
+    "days_back": 7,
+    "limit": 50
+  }
+}
+```
+
+**Examples:**
+```bash
+# Get recent emails
+curl "http://localhost:5000/api/emails?user_email=user@gmail.com"
+
+# Filter by sender
+curl "http://localhost:5000/api/emails?user_email=user@gmail.com&sender=boss@company.com"
+
+# Filter by subject and limit results
+curl "http://localhost:5000/api/emails?user_email=user@gmail.com&subject=meeting&limit=10"
+```
+
+#### `GET /api/emails/{email_id}`
+Get full details of a specific email from Gmail API.
+
+**Path Parameters:**
+- `email_id` - Gmail message ID (from `/emails` response)
+
+**Query Parameters:**
+- `user_email` (required) - User's Gmail address
+
+**Response:**
+```json
+{
+  "status": "success",
+  "email": {
+    "id": "1234567890abcdef",
+    "user_id": "user@gmail.com",
+    "sender": "sender@example.com",
+    "recipient": "user@gmail.com",
+    "subject": "Important Meeting",
+    "body_text": "Hi, let's schedule a meeting for next week...",
+    "body_html": "<p>Hi, let's schedule a meeting for next week...</p>",
+    "date_received": "2024-09-11T10:30:00Z",
+    "thread_id": "thread123",
+    "labels": "INBOX,UNREAD",
+    "has_attachments": true,
+    "attachment_count": 2,
+    "snippet": "Hi, let's schedule a meeting..."
+  },
+  "source": "gmail_api_live"
+}
+```
+
+**Example:**
+```bash
+curl "http://localhost:5000/api/emails/1234567890abcdef?user_email=user@gmail.com"
+```
+
+---
+
+### Email Processing & Analysis
+
+#### `POST /api/process_emails`
+Fetch emails from Gmail, analyze with LLM, and store in database.
+
+**Request Body:**
+```json
+{
+  "oauth_token": {
+    "access_token": "ya29.a0AfH6SMC...",
+    "refresh_token": "1//04..."
+  },
+  "days_back": 7,
+  "max_emails": 50
+}
+```
+
+**Response:**
+```json
+{
+  "status": "success",
+  "message": "Processed 25 emails",
+  "processed_count": 25,
+  "total_fetched": 30,
+  "errors_count": 0,
+  "processed_emails": [
+    {
+      "id": "1234567890abcdef",
+      "sender": "boss@company.com",
+      "subject": "Project Update",
+      "priority": "high",
+      "category": "work",
+      "sentiment": "neutral",
+      "action_required": true,
+      "summary": "Boss requesting project status update by Friday"
+    }
+  ]
+}
+```
+
+**Example:**
+```bash
+curl -X POST http://localhost:5000/api/process_emails \
+  -H "Content-Type: application/json" \
+  -d '{
+    "oauth_token": {
+      "access_token": "ya29.a0AfH6SMC...",
+      "refresh_token": "1//04..."
+    },
+    "days_back": 7,
+    "max_emails": 50
+  }'
+```
+
+#### `GET /api/emails/summary`
+Get statistics about processed emails stored in database.
+
+**Query Parameters:**
+- `user_email` (required) - User's Gmail address
+
+**Response:**
+```json
+{
+  "status": "success",
+  "summary": {
+    "total_emails": 150,
+    "high_priority": 12,
+    "action_required": 8,
+    "categories": {
+      "work": 80,
+      "personal": 35,
+      "promotional": 25,
+      "social": 10
+    }
+  }
+}
+```
+
+**Example:**
+```bash
+curl "http://localhost:5000/api/emails/summary?user_email=user@gmail.com"
+```
+
+---
+
+### Error Responses
+
+All endpoints return consistent error responses:
+
+```json
+{
+  "status": "error",
+  "message": "Descriptive error message",
+  "error_type": "ValueError"
+}
+```
+
+**Common HTTP Status Codes:**
+- `200` - Success
+- `400` - Bad Request (missing/invalid parameters)
+- `401` - Unauthorized (no valid token found)
+- `404` - Not Found (email/resource doesn't exist)  
+- `500` - Internal Server Error
+
+---
+
+### Authentication Flow
+
+1. **Get OAuth2 token** from Google OAuth2 flow in your client app
+2. **Store token** via `POST /api/add_user` 
+3. **Use stored token** for subsequent API calls
+
+**Important Notes:**
+- Tokens are stored in memory and cleared on server restart
+- All email endpoints require prior token storage via `/add_user`
+- `/emails` and `/emails/{id}` fetch live data from Gmail API
+- `/process_emails` analyzes and stores emails in database for later querying
 
 ## Testing
 
