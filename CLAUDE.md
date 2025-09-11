@@ -54,10 +54,58 @@ Based on the directory name `stay_backend`, this appears to be intended as a bac
 
 ### Common Backend Frameworks and Commands
 
-**If using Python (FastAPI/Django):**
-- `pip install -r requirements.txt` - Install dependencies
-- `python -m uvicorn main:app --reload` - Start FastAPI development server
-- `python manage.py runserver` - Start Django development server (if Django)
-- `pytest` - Run tests
-- `python -m flake8` or `ruff check` - Run linting
+**Python Flask with uv:**
+- `uv sync` - Install all dependencies (including dev dependencies)
+- `uv sync --no-group dev` - Install production dependencies only
+- `uv run python run.py` - Start Flask development server
+- `uv run pytest` - Run tests  
+- `uv run ruff check app/ tests/` - Run linting
+- `uv run black app/ tests/` - Run code formatting
+- `uv run mypy app/` - Run type checking
+- `make help` - Show all available Makefile commands
+
+## Quick Development Setup
+
+### Prerequisites
+- Python 3.9+ installed
+- uv package manager: `curl -LsSf https://astral.sh/uv/install.sh | sh`
+- Redis server (for background processing): `brew install redis` (macOS)
+- Google Cloud Console project with Gmail API enabled
+- OpenAI API account
+
+### Setup Steps
+```bash
+# 1. Install dependencies
+uv sync
+
+# 2. Configure environment
+cp .env.example .env
+# Edit .env with your API keys:
+# - GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET from Google Cloud Console
+# - OPENAI_API_KEY from OpenAI platform
+# - Other configuration as needed
+
+# 3. Start Redis (in separate terminal)
+redis-server
+
+# 4. Run the application
+uv run python run.py
+
+# 5. Start background worker (in separate terminal, optional)
+uv run celery -A celery_worker.celery worker --loglevel=info
+
+# 6. Run tests
+uv run pytest
+```
+
+### API Access
+- Health check: http://localhost:5000/api/health
+- API documentation: http://localhost:5000/docs/
+- Main API endpoints: http://localhost:5000/api/
+
+### Development Workflow
+- Use `make` commands for common tasks (see `make help`)
+- Code formatting: `make format`
+- Run tests: `make test`
+- Run all checks: `make check`
 
