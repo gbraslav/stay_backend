@@ -67,13 +67,14 @@ class GmailService:
             logger.error(f"Gmail API error in get_message_details: {e}")
             raise
     
-    def get_recent_messages(self, days=7, max_results=100):
+    def get_recent_messages(self, days=7, max_results=100, query=None):
         """
         Get recent messages from the last N days
         
         Args:
             days (int): Number of days to look back
             max_results (int): Maximum number of messages
+            query (str, optional): Additional Gmail search query
             
         Returns:
             list: List of message details
@@ -84,10 +85,16 @@ class GmailService:
             start_date = end_date - timedelta(days=days)
             
             # Format dates for Gmail query
-            query = f"after:{start_date.strftime('%Y/%m/%d')} before:{end_date.strftime('%Y/%m/%d')}"
+            date_query = f"after:{start_date.strftime('%Y/%m/%d')} before:{end_date.strftime('%Y/%m/%d')}"
+            
+            # Combine with user query if provided
+            if query and query.strip():
+                combined_query = f"{date_query} {query.strip()}"
+            else:
+                combined_query = date_query
             
             # Get message list
-            messages_result = self.get_messages(query=query, max_results=max_results)
+            messages_result = self.get_messages(query=combined_query, max_results=max_results)
             messages = messages_result.get('messages', [])
             
             # Get details for each message
