@@ -516,7 +516,7 @@ CMD ["uv", "run", "gunicorn", "-w", "4", "-b", "0.0.0.0:5001", "run:app"]
 This project is licensed under the MIT License - see the LICENSE file for details.
 
 Curl examples:
-curl -X POST localhost:5001/api/add_user -H "Content-Type: application/json" -d '{"access_token":"ya29.a0AS3H6NwxGnjc7N2xRLJWy1_CR0VjEw34yEl4dJ4H3tZMgBAuKVjyajJVPT0rlWogNYM4IJaDALJBAODdxGonh9bHFIRvohVockyGKf64E2q8LqobW64WXmM3DI6iqmb4UUWDdqoecQE-Kwq2TmKLVYAnxMw80Pjyfk3JyTc92I1m1nXzVxeIaCsgZ_ojZN1_3jxYZ7kaCgYKAZoSARYSFQHGX2MiIKgRzlhoc_ZsF4byITtUtw0206"}'
+curl -X POST localhost:5001/api/add_user -H "Content-Type: application/json" -d '{"access_token":""}'
 
 curl "localhost:5001/api/emails?user_email=gbraslavsky@gmail.com"
 
