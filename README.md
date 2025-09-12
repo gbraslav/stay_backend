@@ -74,9 +74,9 @@ uv run celery -A celery_worker.celery worker --loglevel=info
 
 ### 5. Access the API
 
-- **API Base URL**: http://localhost:5000/api/
-- **Documentation**: http://localhost:5000/docs/
-- **Health Check**: http://localhost:5000/api/health
+- **API Base URL**: http://localhost:5001/api/
+- **Documentation**: http://localhost:5001/docs/
+- **Health Check**: http://localhost:5001/api/health
 
 ## API Endpoints
 
@@ -96,7 +96,7 @@ Check service health and status.
 
 **Example:**
 ```bash
-curl http://localhost:5000/api/health
+curl http://localhost:5001/api/health
 ```
 
 ---
@@ -140,7 +140,7 @@ Store user's OAuth2 token for Gmail access. This must be called first before usi
 
 **Example:**
 ```bash
-curl -X POST http://localhost:5000/api/add_user \
+curl -X POST http://localhost:5001/api/add_user \
   -H "Content-Type: application/json" \
   -d '{
     "access_token": "ya29.a0AfH6SMC...",
@@ -195,13 +195,13 @@ Get live emails directly from Gmail API using stored tokens.
 **Examples:**
 ```bash
 # Get recent emails
-curl "http://localhost:5000/api/emails?user_email=user@gmail.com"
+curl "http://localhost:5001/api/emails?user_email=user@gmail.com"
 
 # Filter by sender
-curl "http://localhost:5000/api/emails?user_email=user@gmail.com&sender=boss@company.com"
+curl "http://localhost:5001/api/emails?user_email=user@gmail.com&sender=boss@company.com"
 
 # Filter by subject and limit results
-curl "http://localhost:5000/api/emails?user_email=user@gmail.com&subject=meeting&limit=10"
+curl "http://localhost:5001/api/emails?user_email=user@gmail.com&subject=meeting&limit=10"
 ```
 
 #### `GET /api/emails/{email_id}`
@@ -238,7 +238,7 @@ Get full details of a specific email from Gmail API.
 
 **Example:**
 ```bash
-curl "http://localhost:5000/api/emails/1234567890abcdef?user_email=user@gmail.com"
+curl "http://localhost:5001/api/emails/1234567890abcdef?user_email=user@gmail.com"
 ```
 
 ---
@@ -285,7 +285,7 @@ Fetch emails from Gmail, analyze with LLM, and store in database.
 
 **Example:**
 ```bash
-curl -X POST http://localhost:5000/api/process_emails \
+curl -X POST http://localhost:5001/api/process_emails \
   -H "Content-Type: application/json" \
   -d '{
     "oauth_token": {
@@ -323,7 +323,7 @@ Get statistics about processed emails stored in database.
 
 **Example:**
 ```bash
-curl "http://localhost:5000/api/emails/summary?user_email=user@gmail.com"
+curl "http://localhost:5001/api/emails/summary?user_email=user@gmail.com"
 ```
 
 ---
@@ -468,11 +468,11 @@ Key environment variables:
 
 ```bash
 # With uv
-uv run gunicorn -w 4 -b 0.0.0.0:5000 run:app
+uv run gunicorn -w 4 -b 0.0.0.0:5001 run:app
 
 # Or activate environment first
 source .venv/bin/activate
-gunicorn -w 4 -b 0.0.0.0:5000 run:app
+gunicorn -w 4 -b 0.0.0.0:5001 run:app
 ```
 
 ### Docker (Optional)
@@ -496,10 +496,10 @@ RUN uv sync --frozen --no-cache
 COPY . .
 
 # Expose port
-EXPOSE 5000
+EXPOSE 5001
 
 # Run the application
-CMD ["uv", "run", "gunicorn", "-w", "4", "-b", "0.0.0.0:5000", "run:app"]
+CMD ["uv", "run", "gunicorn", "-w", "4", "-b", "0.0.0.0:5001", "run:app"]
 ```
 
 ## Contributing
@@ -514,3 +514,11 @@ CMD ["uv", "run", "gunicorn", "-w", "4", "-b", "0.0.0.0:5000", "run:app"]
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
+
+Curl examples:
+curl -X POST localhost:5001/api/add_user -H "Content-Type: application/json" -d '{"access_token":"ya29.a0AS3H6NwxGnjc7N2xRLJWy1_CR0VjEw34yEl4dJ4H3tZMgBAuKVjyajJVPT0rlWogNYM4IJaDALJBAODdxGonh9bHFIRvohVockyGKf64E2q8LqobW64WXmM3DI6iqmb4UUWDdqoecQE-Kwq2TmKLVYAnxMw80Pjyfk3JyTc92I1m1nXzVxeIaCsgZ_ojZN1_3jxYZ7kaCgYKAZoSARYSFQHGX2MiIKgRzlhoc_ZsF4byITtUtw0206"}'
+
+curl "localhost:5001/api/emails?user_email=gbraslavsky@gmail.com"
+
+curl "localhost:5001/api/emails/199399dfc60e38c8?user_email=gbraslavsky@gmail.com"
+

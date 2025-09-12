@@ -51,7 +51,7 @@ worker: ## Start Celery worker
 	uv run celery -A celery_worker.celery worker --loglevel=info
 
 docs: ## Generate and serve documentation (if configured)
-	@echo "Documentation will be available at http://localhost:5000/docs/ when running the server"
+	@echo "Documentation will be available at http://localhost:5001/docs/ when running the server"
 
 check: ## Run all checks (lint, format-check, type-check, test)
 	uv run ruff check app/ tests/

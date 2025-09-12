@@ -99,9 +99,9 @@ uv run pytest
 ```
 
 ### API Access
-- Health check: http://localhost:5000/api/health
-- API documentation: http://localhost:5000/docs/
-- Main API endpoints: http://localhost:5000/api/
+- Health check: http://localhost:5001/api/health
+- API documentation: http://localhost:5001/docs/
+- Main API endpoints: http://localhost:5001/api/
 
 ### Development Workflow
 - Use `make` commands for common tasks (see `make help`)

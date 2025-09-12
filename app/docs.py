@@ -13,7 +13,7 @@ swagger_template = {
             "email": "support@stayontop.com"
         }
     },
-    "host": "localhost:5000",
+    "host": "localhost:5001",
     "basePath": "/api",
     "schemes": [
         "http",

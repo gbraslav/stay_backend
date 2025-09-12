@@ -6,7 +6,7 @@ Manual test script for the modified email endpoints
 import requests
 import json
 
-BASE_URL = "http://localhost:5000/api"
+BASE_URL = "http://localhost:5001/api"
 
 def test_health():
     """Test health endpoint"""
@@ -97,8 +97,8 @@ if __name__ == "__main__":
         print("\n✅ Basic functionality tests completed")
         print("\nTo test with real Gmail tokens:")
         print("1. Get OAuth2 token from Gmail")
-        print("2. curl -X POST localhost:5000/api/add_user -H 'Content-Type: application/json' -d '{\"access_token\":\"YOUR_TOKEN\"}'")
-        print("3. curl 'localhost:5000/api/emails?user_email=YOUR_EMAIL'")
+        print("2. curl -X POST localhost:5001/api/add_user -H 'Content-Type: application/json' -d '{\"access_token\":\"YOUR_TOKEN\"}'")
+        print("3. curl 'localhost:5001/api/emails?user_email=YOUR_EMAIL'")
         
     except requests.exceptions.ConnectionError:
         print("❌ Server not running. Start with: uv run python run.py")
