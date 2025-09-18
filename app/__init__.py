@@ -22,5 +22,13 @@ def create_app(config_class=Config):
     
     with app.app_context():
         db.create_all()
-    
+
+        # Restore user sessions from persistent storage
+        try:
+            from app.utils.startup import restore_user_sessions
+            restore_user_sessions()
+        except Exception as e:
+            # Don't let startup session restoration fail the app
+            print(f"Warning: Failed to restore user sessions: {e}")
+
     return app

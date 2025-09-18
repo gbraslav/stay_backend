@@ -80,3 +80,4 @@ celerybeat.pid
 
 # Redis
 dump.rdb
+user_tokens.json

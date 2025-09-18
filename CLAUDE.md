@@ -14,9 +14,16 @@ This project implements a Python RESTful API for reading emails from gmail and a
 
 ## API Endpoints
 
-- **POST /add_user**: Receives user oauth2 token from the client.
+- **POST /add_user**: Receives user oauth2 token from the client (memory-only storage).
     - **Input**: oauth2 token for the users gmail.
     - **Output**: JSON object with a status of the gmail connection (success/fail).
+    - **Storage**: Tokens stored in memory only, lost on server restart.
+- **POST /add_persistent_user**: Receives user refresh token and returns session token with persistent storage.
+    - **Input**: Google refresh token (`{"refresh_token": "1//04..."}`).
+    - **Processing**: Uses refresh token to get fresh access token, validates Gmail connection.
+    - **Output**: JSON object with session token, user info, and expiry time.
+    - **Storage**: Refresh token persisted to `user_tokens.json` file for future use.
+    - **Session Token**: Returns JWT-based session token (1 hour expiry) for API access.
 - **GET /emails/{email_id}**: Retrieves details of a specific processed email.
     - **Output**: JSON object with full email details.
 - **GET /emails**: Retrieves a list of processed emails with optional filtering/pagination.
@@ -83,6 +90,8 @@ cp .env.example .env
 # Edit .env with your API keys:
 # - GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET from Google Cloud Console
 # - OPENAI_API_KEY from OpenAI platform
+# - TOKEN_STORAGE_FILE (optional): Path for persistent token storage (defaults to user_tokens.json)
+# - JWT_SECRET_KEY (optional): Secret key for session tokens (defaults to dev key)
 # - Other configuration as needed
 
 # 3. Start Redis (in separate terminal)

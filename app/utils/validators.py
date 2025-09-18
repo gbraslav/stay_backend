@@ -41,7 +41,34 @@ def validate_oauth_token(token_data):
     access_token = token_data.get('access_token', '')
     if len(access_token) < 20:
         return False, "Invalid access token format"
-    
+
+    return True, None
+
+def validate_refresh_token(token_data):
+    """
+    Validate refresh token data structure
+
+    Args:
+        token_data (dict): Token data containing refresh token
+
+    Returns:
+        tuple: (is_valid, error_message)
+    """
+    if not isinstance(token_data, dict):
+        return False, "Token data must be a dictionary"
+
+    refresh_token = token_data.get('refresh_token', '')
+    if not refresh_token:
+        return False, "Missing required field: refresh_token"
+
+    # Validate refresh token format (basic check)
+    if len(refresh_token) < 20:
+        return False, "Invalid refresh token format"
+
+    # Google refresh tokens typically start with "1//"
+    if not refresh_token.startswith('1//'):
+        return False, "Invalid Google refresh token format"
+
     return True, None
 
 def validate_pagination_params(limit, offset):

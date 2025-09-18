@@ -22,6 +22,12 @@ class Config:
     # API Configuration
     API_RATE_LIMIT = int(os.environ.get('API_RATE_LIMIT', 100))
 
+    # Token Storage Configuration
+    TOKEN_STORAGE_FILE = os.environ.get('TOKEN_STORAGE_FILE') or 'user_tokens.json'
+
+    # JWT Configuration
+    JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY') or 'dev-jwt-secret-key-change-in-production'
+
 class DevelopmentConfig(Config):
     DEBUG = True
 

@@ -2,7 +2,10 @@ from flask import request, jsonify, current_app
 from app.api import api_bp
 from app.models import Email
 from app.utils import GoogleAuthService, validate_oauth_token
+from app.utils.validators import validate_refresh_token
 from app.utils.token_storage import token_storage
+from app.utils.file_token_storage import FileTokenStorage
+from app.utils.session_tokens import session_token_service
 from app.services import GmailService, EmailParser, LLMService
 from app import db
 import logging
@@ -127,6 +130,7 @@ def add_user():
     try:
         # Get token data from request
         token_data = request.get_json()
+        #print(token_data)
         
         if not token_data:
             return jsonify({
@@ -184,6 +188,228 @@ def add_user():
         
     except Exception as e:
         logger.error(f"Error in add_user: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': 'Internal server error'
+        }), 500
+
+@api_bp.route('/add_persistent_user', methods=['POST'])
+def add_persistent_user():
+    """Add user with refresh token and return session token
+    ---
+    tags:
+      - Authentication
+    parameters:
+      - in: body
+        name: refresh_token_data
+        description: Google refresh token
+        required: true
+        schema:
+          type: object
+          properties:
+            refresh_token:
+              type: string
+              description: Google OAuth2 refresh token
+              example: 1//04xxxxxxxxx
+          required:
+            - refresh_token
+    responses:
+      200:
+        description: Gmail connection established with session token
+        schema:
+          type: object
+          properties:
+            status:
+              type: string
+              example: success
+            message:
+              type: string
+              example: Gmail connection established with session token
+            user_email:
+              type: string
+              example: user@gmail.com
+            session_token:
+              type: string
+              description: JWT session token for API access
+              example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+            expires_in:
+              type: integer
+              description: Session token expiry in seconds
+              example: 3600
+            gmail_info:
+              type: object
+              properties:
+                total_messages:
+                  type: integer
+                  example: 1500
+                total_threads:
+                  type: integer
+                  example: 750
+            storage_type:
+              type: string
+              example: persistent_file
+      400:
+        description: Invalid request or refresh token
+        schema:
+          $ref: '#/definitions/ErrorResponse'
+      401:
+        description: Failed to validate Gmail connection
+        schema:
+          $ref: '#/definitions/ErrorResponse'
+      500:
+        description: Internal server error
+        schema:
+          $ref: '#/definitions/ErrorResponse'
+    """
+    try:
+        # Get token data from request
+        token_data = request.get_json()
+
+        if not token_data:
+            return jsonify({
+                'status': 'error',
+                'message': 'No token data provided'
+            }), 400
+
+        # Validate refresh token structure
+        is_valid, error_msg = validate_refresh_token(token_data)
+        if not is_valid:
+            return jsonify({
+                'status': 'error',
+                'message': f'Invalid refresh token: {error_msg}'
+            }), 400
+
+        refresh_token = token_data['refresh_token']
+
+        # Create Google Auth service
+        auth_service = GoogleAuthService()
+
+        # Use refresh token to get fresh access token and credentials
+        try:
+            credentials = auth_service.create_credentials_from_refresh_token(refresh_token)
+        except ValueError as e:
+            return jsonify({
+                'status': 'error',
+                'message': f'Invalid refresh token: {str(e)}'
+            }), 400
+
+        # Validate credentials by testing Gmail connection
+        is_valid, user_info = auth_service.validate_credentials(credentials)
+        if not is_valid:
+            return jsonify({
+                'status': 'error',
+                'message': 'Failed to validate Gmail connection'
+            }), 401
+
+        # Get user email
+        user_email = user_info.get('email')
+        if not user_email:
+            return jsonify({
+                'status': 'error',
+                'message': 'Unable to retrieve user email'
+            }), 400
+
+        # Create file-based token storage instance
+        storage_path = current_app.config.get('TOKEN_STORAGE_FILE', 'user_tokens.json')
+        file_storage = FileTokenStorage(storage_path)
+
+        # Store refresh token persistently (for future use)
+        refresh_token_data = {
+            'refresh_token': refresh_token,
+            'user_email': user_email,
+            'token_type': 'Bearer',
+            'scope': 'https://www.googleapis.com/auth/gmail.readonly'
+        }
+        file_storage.store_token(user_email, refresh_token_data)
+        logger.info(f"Stored persistent refresh token for user: {user_email}")
+
+        # Generate session token for client (1 hour expiry)
+        session_expires_in = 3600
+        try:
+            session_token = session_token_service.generate_session_token(
+                user_email,
+                expires_in=session_expires_in
+            )
+        except ValueError as e:
+            return jsonify({
+                'status': 'error',
+                'message': f'Failed to generate session token: {str(e)}'
+            }), 500
+
+        # Also store session token in memory for other endpoints to use
+        session_token_data = {
+            'access_token': credentials.token,
+            'refresh_token': refresh_token,
+            'token_type': 'Bearer',
+            'expires_in': session_expires_in,
+            'scope': 'https://www.googleapis.com/auth/gmail.readonly',
+            'session_token': session_token
+        }
+        token_storage.store_token(user_email, session_token_data)
+        logger.info(f"Stored session token in memory for user: {user_email}")
+
+        return jsonify({
+            'status': 'success',
+            'message': 'Gmail connection established with session token',
+            'user_email': user_email,
+            'session_token': session_token,
+            'expires_in': session_expires_in,
+            'gmail_info': {
+                'total_messages': user_info.get('messages_total', 0),
+                'total_threads': user_info.get('threads_total', 0)
+            },
+            'storage_type': 'persistent_file'
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error in add_persistent_user: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': 'Internal server error'
+        }), 500
+
+@api_bp.route('/sessions/status', methods=['GET'])
+def get_sessions_status():
+    """Get current session status and statistics
+    ---
+    tags:
+      - Authentication
+    responses:
+      200:
+        description: Session status retrieved successfully
+        schema:
+          type: object
+          properties:
+            status:
+              type: string
+              example: success
+            sessions:
+              type: object
+              properties:
+                total_sessions:
+                  type: integer
+                  example: 2
+                users:
+                  type: array
+                  items:
+                    type: string
+                  example: ["user1@gmail.com", "user2@gmail.com"]
+      500:
+        description: Internal server error
+        schema:
+          $ref: '#/definitions/ErrorResponse'
+    """
+    try:
+        from app.utils.startup import get_session_stats
+        stats = get_session_stats()
+
+        return jsonify({
+            'status': 'success',
+            'sessions': stats
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error getting session status: {str(e)}")
         return jsonify({
             'status': 'error',
             'message': 'Internal server error'

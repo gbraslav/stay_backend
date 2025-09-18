@@ -39,6 +39,7 @@ dependencies = [
     "html2text==2024.2.26",
     "flask-swagger-ui==4.11.1",
     "flasgger==0.9.7.1",
+    "pyjwt==2.8.0",
 ]
 
 [project.optional-dependencies]
