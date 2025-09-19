@@ -29,6 +29,11 @@ This project implements a Python RESTful API for reading emails from gmail and a
 - **GET /emails**: Retrieves a list of processed emails with optional filtering/pagination.
     - **Query Parameters**: `sender`, `subject`, `limit`, `offset`.
     - **Output**: JSON array of email summaries.
+- **GET /check_priority**: Aggregates last 10 emails from all users with active access tokens.
+    - **Input**: None (uses all active users automatically).
+    - **Processing**: Fetches recent emails from all users, parses content, concatenates with separators.
+    - **Output**: JSON with concatenated email string, user/email counts, and error statistics.
+    - **Separators**: Uses 80 asterisk characters (`*`) between each email for readability.
 
 ## Code Style and Best Practices
 
@@ -117,4 +122,5 @@ uv run pytest
 - Code formatting: `make format`
 - Run tests: `make test`
 - Run all checks: `make check`
+- update the documentation and claude.md file for each api change
 

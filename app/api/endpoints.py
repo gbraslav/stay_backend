@@ -415,6 +415,168 @@ def get_sessions_status():
             'message': 'Internal server error'
         }), 500
 
+@api_bp.route('/check_priority', methods=['GET'])
+def check_priority():
+    """Check priority by getting last 10 emails from all users with access tokens
+    ---
+    tags:
+      - Emails
+    responses:
+      200:
+        description: Priority check completed successfully
+        schema:
+          type: object
+          properties:
+            status:
+              type: string
+              example: success
+            users_processed:
+              type: integer
+              example: 3
+              description: Number of users processed
+            total_emails:
+              type: integer
+              example: 25
+              description: Total number of emails retrieved
+            errors_count:
+              type: integer
+              example: 1
+              description: Number of users that failed processing
+            concatenated_emails:
+              type: string
+              description: All emails concatenated with 80-asterisk separators
+              example: "=== USER: user1@gmail.com ===\nFrom: sender@example.com\nSubject: Test\n..."
+      500:
+        description: Internal server error
+        schema:
+          $ref: '#/definitions/ErrorResponse'
+    """
+    try:
+
+        # Separator constant
+        SEPARATOR = "*" * 80
+        logger.warning ("Hi, I'm here 0000/n")
+
+        # Get all users with stored tokens
+        stored_users = token_storage.get_stored_users()
+
+        if not stored_users:
+            return jsonify({
+                'status': 'success',
+                'users_processed': 0,
+                'total_emails': 0,
+                'errors_count': 0,
+                'concatenated_emails': 'No users with active tokens found.'
+            }), 200
+
+        concatenated_content = []
+        users_processed = 0
+        total_emails = 0
+        errors_count = 0
+
+        print("DEBUG: Your message here")
+
+        auth_service = GoogleAuthService()
+        email_parser = EmailParser()
+
+
+
+        for user_email in stored_users:
+            try:
+                # Check if token is still valid
+                if not token_storage.is_token_valid(user_email):
+                    logger.warning(f"Invalid token for user: {user_email}")
+                    errors_count += 1
+                    continue
+
+                # Get stored token data
+                token_data = token_storage.get_token(user_email)
+                if not token_data:
+                    logger.warning(f"No token data for user: {user_email}")
+                    errors_count += 1
+                    continue
+
+                # Create credentials and Gmail service
+                credentials = auth_service.create_credentials_from_token({
+                    'access_token': token_data['access_token'],
+                    'refresh_token': token_data.get('refresh_token'),
+                    'token_type': token_data.get('token_type', 'Bearer'),
+                    'scope': token_data.get('scope')
+                })
+
+                gmail_service = GmailService(credentials)
+
+                # Get last 10 emails (last 7 days, max 10 results)
+                messages = gmail_service.get_recent_messages(days=7, max_results=10)
+
+
+                if not messages:
+                    logger.info(f"No recent messages for user: {user_email}")
+                    users_processed += 1
+                    concatenated_content.append(f"=== USER: {user_email} ===")
+                    concatenated_content.append("No recent emails found.")
+                    concatenated_content.append("")
+                    continue
+
+                # Add user header
+                concatenated_content.append(f"=== USER: {user_email} ===")
+
+                user_emails = []
+                for message in messages[:10]:  # Limit to 10 emails
+                    try:
+                        parsed_email = email_parser.parse_gmail_message(message, user_email)
+                        if parsed_email:
+                            # Format email content
+                            email_content = []
+                            email_content.append(f"From: {parsed_email.get('sender', 'Unknown')}")
+                            email_content.append(f"Subject: {parsed_email.get('subject', 'No Subject')}")
+                            email_content.append(f"Date: {parsed_email.get('date_received', 'Unknown Date')}")
+
+                            # Truncate body content to first 300 characters
+                            body_text = parsed_email.get('body_text', '')
+                            if len(body_text) > 300:
+                                body_text = body_text[:300] + "..."
+                            email_content.append(f"Content: {body_text}")
+
+                            user_emails.append("\n".join(email_content))
+                            total_emails += 1
+
+                    except Exception as e:
+                        logger.warning(f"Error parsing message for user {user_email}: {e}")
+                        continue
+
+                # Join emails with separators (separator between emails, not after last)
+                if user_emails:
+                    concatenated_content.append(f"\n{SEPARATOR}\n".join(user_emails))
+                else:
+                    concatenated_content.append("No valid emails found.")
+
+                concatenated_content.append("")  # Empty line after user section
+                users_processed += 1
+
+            except Exception as e:
+                logger.error(f"Error processing user {user_email}: {str(e)}")
+                errors_count += 1
+                continue
+
+        # Join all content
+        final_content = "\n".join(concatenated_content)
+
+        return jsonify({
+            'status': 'success',
+            'users_processed': users_processed,
+            'total_emails': total_emails,
+            'errors_count': errors_count,
+            'concatenated_emails': final_content
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error in check_priority: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': 'Internal server error'
+        }), 500
+
 @api_bp.route('/process_emails', methods=['POST'])
 def process_emails():
     """Process emails for a user with LLM analysis
@@ -478,6 +640,7 @@ def process_emails():
           $ref: '#/definitions/ErrorResponse'
     """
     try:
+
         # Get request data
         request_data = request.get_json()
         
@@ -685,6 +848,7 @@ def get_emails():
         limit = request.args.get('limit', 50)
         days_back = request.args.get('days_back', 7)
         
+
         # Validate parameters
         if not user_email:
             return jsonify({
@@ -838,6 +1002,7 @@ def get_email_details(email_id):
         # Get user email from query parameter
         user_email = request.args.get('user_email')
         
+
         if not user_email:
             return jsonify({
                 'status': 'error',
