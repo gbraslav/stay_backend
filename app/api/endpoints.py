@@ -1160,3 +1160,175 @@ def get_emails_summary():
             'status': 'error',
             'message': 'Internal server error'
         }), 500
+
+@api_bp.route('/process_single_email', methods=['POST'])
+def process_single_email():
+    """Process single email with ChatGPT using custom prompt
+    ---
+    tags:
+      - Emails
+    parameters:
+      - in: body
+        name: request_body
+        description: Email processing request
+        required: true
+        schema:
+          type: object
+          required:
+            - email_id
+            - user_email
+            - prompt
+          properties:
+            email_id:
+              type: string
+              description: Gmail message ID
+              example: "1234567890abcdef"
+            user_email:
+              type: string
+              description: User's Gmail address
+              example: "user@gmail.com"
+            prompt:
+              type: string
+              description: Custom prompt for ChatGPT processing
+              example: "Summarize this email and identify any action items"
+    responses:
+      200:
+        description: Email processed successfully
+        schema:
+          type: object
+          properties:
+            status:
+              type: string
+              example: success
+            email_id:
+              type: string
+              example: "1234567890abcdef"
+            response:
+              type: string
+              description: ChatGPT response
+              example: "This email is about..."
+      400:
+        description: Invalid request parameters
+        schema:
+          $ref: '#/definitions/ErrorResponse'
+      401:
+        description: No valid token found for user
+        schema:
+          $ref: '#/definitions/ErrorResponse'
+      404:
+        description: Email not found
+        schema:
+          $ref: '#/definitions/ErrorResponse'
+      500:
+        description: Internal server error
+        schema:
+          $ref: '#/definitions/ErrorResponse'
+    """
+    try:
+        # Get request data
+        data = request.get_json()
+
+        if not data:
+            return jsonify({
+                'status': 'error',
+                'message': 'JSON body required'
+            }), 400
+
+        email_id = data.get('email_id')
+        user_email = data.get('user_email')
+        prompt = data.get('prompt')
+
+        # Validate required parameters
+        if not email_id:
+            return jsonify({
+                'status': 'error',
+                'message': 'email_id is required'
+            }), 400
+
+        if not user_email:
+            return jsonify({
+                'status': 'error',
+                'message': 'user_email is required'
+            }), 400
+
+        if not prompt:
+            return jsonify({
+                'status': 'error',
+                'message': 'prompt is required'
+            }), 400
+
+        # Check if we have stored tokens for this user
+        if not token_storage.is_token_valid(user_email):
+            return jsonify({
+                'status': 'error',
+                'message': 'No valid token found for user. Please call /add_user or /add_persistent_user first.'
+            }), 401
+
+        # Get stored token data
+        token_data = token_storage.get_token(user_email)
+
+        # Create credentials and Gmail service
+        auth_service = GoogleAuthService()
+        credentials = auth_service.create_credentials_from_token({
+            'access_token': token_data['access_token'],
+            'refresh_token': token_data.get('refresh_token'),
+            'token_type': token_data.get('token_type', 'Bearer'),
+            'scope': token_data.get('scope')
+        })
+
+        gmail_service = GmailService(credentials)
+        email_parser = EmailParser()
+
+        # Fetch email details from Gmail
+        try:
+            message = gmail_service.get_message_details(email_id)
+
+        except Exception as gmail_error:
+            logger.warning(f"Gmail API error for message {email_id}: {gmail_error}")
+            return jsonify({
+                'status': 'error',
+                'message': 'Email not found in Gmail or access denied'
+            }), 404
+
+        # Parse the message
+        parsed_email = email_parser.parse_gmail_message(message, user_email)
+
+        if not parsed_email:
+            return jsonify({
+                'status': 'error',
+                'message': 'Failed to parse email content'
+            }), 500
+
+        # Prepare email content for LLM
+        email_content = f"""
+Subject: {parsed_email.get('subject', 'No Subject')}
+From: {parsed_email.get('sender', 'Unknown Sender')}
+To: {parsed_email.get('recipient', 'Unknown Recipient')}
+Date: {parsed_email.get('date_received', 'Unknown Date')}
+
+{parsed_email.get('body_text', 'No content available')}
+"""
+
+        # Send to ChatGPT
+        llm_service = LLMService()
+        try:
+            llm_response = llm_service.analyze_email_content(email_content, prompt)
+        except Exception as llm_error:
+            logger.error(f"LLM service error: {llm_error}")
+            return jsonify({
+                'status': 'error',
+                'message': 'Failed to process email with ChatGPT'
+            }), 500
+
+        return jsonify({
+            'status': 'success',
+            'email_id': email_id,
+            'response': llm_response
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error in process_single_email: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': 'Internal server error'
+        }), 500

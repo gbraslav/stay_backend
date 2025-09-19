@@ -2,13 +2,34 @@ import openai
 from flask import current_app
 import logging
 import json
+import httpx
 
 logger = logging.getLogger(__name__)
 
 class LLMService:
     def __init__(self):
-        openai.api_key = current_app.config['OPENAI_API_KEY']
-        self.client = openai.OpenAI(api_key=current_app.config['OPENAI_API_KEY'])
+        api_key = current_app.config.get('OPENAI_API_KEY')
+
+        if not api_key:
+            raise ValueError("OPENAI_API_KEY not found in configuration. Please set your OpenAI API key.")
+
+        try:
+            # Create a custom HTTPX client to bypass proxy issues
+            http_client = httpx.Client(
+                timeout=30.0,
+                follow_redirects=True
+            )
+
+            # Create OpenAI client with our custom HTTP client
+            self.client = openai.OpenAI(
+                api_key=api_key,
+                http_client=http_client
+            )
+
+        except Exception as e:
+            logger.error(f"Failed to create OpenAI client: {e}")
+            logger.error(f"Error type: {type(e).__name__}")
+            raise
     
     def analyze_email(self, email_data):
         """
@@ -210,3 +231,40 @@ Provide a brief summary (2-3 paragraphs).
                 'email_count': len(emails),
                 'total_emails': len(emails)
             }
+
+    def analyze_email_content(self, email_content, custom_prompt):
+        """
+        Analyze email content with custom prompt using ChatGPT
+
+        Args:
+            email_content (str): Email content including headers and body
+            custom_prompt (str): Custom prompt for analysis
+
+        Returns:
+            str: ChatGPT response
+        """
+        try:
+            # Create the full prompt
+            full_prompt = f"""
+{custom_prompt}
+
+Email Content:
+{email_content}
+"""
+
+            # Call OpenAI API
+            response = self.client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": "You are a helpful AI assistant that analyzes emails based on user prompts."},
+                    {"role": "user", "content": full_prompt}
+                ],
+                temperature=0.3,
+                max_tokens=1000
+            )
+
+            return response.choices[0].message.content
+
+        except Exception as e:
+            logger.error(f"Error in analyze_email_content: {e}")
+            raise
