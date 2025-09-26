@@ -51,6 +51,7 @@ class LLMService:
             # Call OpenAI API
             response = self.client.chat.completions.create(
                 model="gpt-3.5-turbo",
+                #model="68cfbae2552c81919066195a03170438-stayontop",
                 messages=[
                     {"role": "system", "content": self._get_system_prompt()},
                     {"role": "user", "content": prompt}
@@ -58,6 +59,9 @@ class LLMService:
                 temperature=0.3,
                 max_tokens=500
             )
+            logger.debug("content: " + content)
+            logger.debug("System Prompt: " + self._get_system_prompt())
+            logger.debug("Prompt: " + prompt)
             
             # Parse response
             analysis_text = response.choices[0].message.content
@@ -82,27 +86,13 @@ class LLMService:
     def _get_system_prompt(self):
         """Get system prompt for email analysis"""
         return """
-You are an AI assistant that analyzes emails to help users stay organized and productive.
-
-Analyze the provided email and return a JSON response with the following structure:
-{
-    "sentiment": "positive/neutral/negative",
-    "priority": "high/medium/low", 
-    "category": "work/personal/promotional/notification/other",
-    "summary": "Brief 1-2 sentence summary",
-    "action_required": true/false,
-    "key_points": ["point1", "point2", "point3"]
+You are a personal assistant that is in charge of going through my emails. Your job is to make sure I do not miss any critical action items or payments, based on the email content.
+You will review the input email text and return the following info:
+From, Title, Priority from 0 to 5, Dollar amount if available and Deadline. Priority 0 is the lowest, for spam or promotional emails. Priority 5 is Urgent, act now.  
+Return should be in a Json format. 
+Example:
+{ "From": "Gabby", "Title":"Insurance Payment","Priority":4,"Dollar amount":50, "Deadline":"10/02/2025"
 }
-
-Guidelines:
-- Sentiment: Overall tone of the email
-- Priority: Based on urgency and importance indicators
-- Category: Primary classification of email type
-- Summary: Concise summary of main content
-- Action Required: Whether email needs user response/action
-- Key Points: 2-3 most important points (optional)
-
-Respond only with valid JSON.
 """
     
     def _create_analysis_prompt(self, content):
@@ -210,14 +200,15 @@ Provide a brief summary (2-3 paragraphs).
             
             response = self.client.chat.completions.create(
                 model="gpt-3.5-turbo",
+                #model="68cfbae2552c81919066195a03170438-stayontop",
                 messages=[
-                    {"role": "system", "content": "You are a helpful assistant that summarizes email collections."},
+                    {"role": "system", "content": self._get_system_prompt()},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.3,
                 max_tokens=300
             )
-            
+
             return {
                 'summary': response.choices[0].message.content,
                 'email_count': len(emails_to_process),
@@ -251,17 +242,22 @@ Provide a brief summary (2-3 paragraphs).
 Email Content:
 {email_content}
 """
-
+            system_prompt = self._get_system_prompt()
             # Call OpenAI API
             response = self.client.chat.completions.create(
                 model="gpt-3.5-turbo",
+                #model="68cfbae2552c81919066195a03170438-stayontop",
                 messages=[
-                    {"role": "system", "content": "You are a helpful AI assistant that analyzes emails based on user prompts."},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": full_prompt}
                 ],
+
                 temperature=0.3,
                 max_tokens=1000
             )
+      
+            logger.debug("System Prompt: " + self._get_system_prompt())
+            logger.debug("Full_prompt: " + full_prompt)
 
             return response.choices[0].message.content
 

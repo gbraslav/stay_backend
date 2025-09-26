@@ -3,6 +3,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from flasgger import Swagger
 from app.config import Config
+import logging
 
 db = SQLAlchemy()
 
@@ -13,6 +14,17 @@ def create_app(config_class=Config):
     db.init_app(app)
     CORS(app)
     
+    # Configure logging
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    
+    # Set Flask app logger to debug level
+    app.logger.setLevel(logging.DEBUG)
+
+
+
     # Initialize Swagger documentation
     from app.docs import swagger_template, swagger_config
     swagger = Swagger(app, template=swagger_template, config=swagger_config)
