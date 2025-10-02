@@ -14,26 +14,57 @@ This project implements a Python RESTful API for reading emails from gmail and a
 
 ## API Endpoints
 
-- **POST /add_user**: Receives user oauth2 token from the client (memory-only storage).
-    - **Input**: oauth2 token for the users gmail.
-    - **Output**: JSON object with a status of the gmail connection (success/fail).
-    - **Storage**: Tokens stored in memory only, lost on server restart.
-- **POST /add_persistent_user**: Receives user refresh token and returns session token with persistent storage.
-    - **Input**: Google refresh token (`{"refresh_token": "1//04..."}`).
-    - **Processing**: Uses refresh token to get fresh access token, validates Gmail connection.
-    - **Output**: JSON object with session token, user info, and expiry time.
-    - **Storage**: Refresh token persisted to `user_tokens.json` file for future use.
-    - **Session Token**: Returns JWT-based session token (1 hour expiry) for API access.
-- **GET /emails/{email_id}**: Retrieves details of a specific processed email.
-    - **Output**: JSON object with full email details.
-- **GET /emails**: Retrieves a list of processed emails with optional filtering/pagination.
-    - **Query Parameters**: `sender`, `subject`, `limit`, `offset`.
-    - **Output**: JSON array of email summaries.
-- **GET /check_priority**: Aggregates last 10 emails from all users with active access tokens.
-    - **Input**: None (uses all active users automatically).
-    - **Processing**: Fetches recent emails from all users, parses content, concatenates with separators.
-    - **Output**: JSON with concatenated email string, user/email counts, and error statistics.
-    - **Separators**: Uses 80 asterisk characters (`*`) between each email for readability.
+### Health & Status
+- **GET /health**: Health check endpoint
+    - **Output**: JSON object with service status, name, and version
+    - **Response**: `{"status": "healthy", "service": "stay_backend", "version": "1.0.0"}`
+
+### Authentication & User Management
+- **POST /add_user**: Receives user oauth2 token from the client (memory-only storage)
+    - **Input**: OAuth2 token object with `access_token`, `refresh_token`, `token_type`, `expires_in`, `scope`
+    - **Output**: JSON object with Gmail connection status, user email, and Gmail info (total messages/threads)
+    - **Storage**: Tokens stored in memory only, lost on server restart
+
+- **POST /add_persistent_user**: Receives user refresh token and returns session token with persistent storage
+    - **Input**: Google refresh token (`{"refresh_token": "1//04..."}`)
+    - **Processing**: Uses refresh token to get fresh access token, validates Gmail connection
+    - **Output**: JSON object with session token, user info, and expiry time
+    - **Storage**: Refresh token persisted to `user_tokens.json` file for future use
+    - **Session Token**: Returns JWT-based session token (1 hour expiry) for API access
+
+- **GET /sessions/status**: Get current session status and statistics
+    - **Output**: JSON object with total sessions count and list of active users
+    - **Response**: `{"status": "success", "sessions": {"total_sessions": 2, "users": ["user1@gmail.com", "user2@gmail.com"]}}`
+
+### Email Processing & Retrieval
+- **GET /emails**: Get live emails from Gmail API using stored tokens
+    - **Query Parameters**: 
+        - `user_email` (required): User's Gmail address
+        - `sender` (optional): Filter by sender email
+        - `subject` (optional): Filter by subject keywords
+        - `limit` (optional, default: 50): Number of emails to return
+        - `days_back` (optional, default: 7): Days to look back
+    - **Output**: JSON array of email summaries with metadata (id, sender, subject, date, snippet, attachments, labels)
+
+- **GET /emails/{email_id}**: Get full details of a specific email from Gmail API
+    - **Path Parameter**: `email_id` - Gmail message ID
+    - **Query Parameters**: `user_email` (required) - User's Gmail address
+    - **Output**: JSON object with complete email details including body, headers, attachments
+
+- **GET /emails/summary**: Get summary statistics for user's processed emails
+    - **Query Parameters**: `user_email` (required) - User's Gmail address
+    - **Output**: JSON object with email statistics (total emails, high priority count, action required count, categories breakdown)
+
+- **POST /process_single_email**: Process single email with ChatGPT
+    - **Input**: `email_id` and `user_email`
+    - **Output**: JSON object with ChatGPT response for the specific email
+
+### Priority & Monitoring
+- **GET /get_10_emails_concat**: Aggregates last 10 emails from all users with active access tokens
+    - **Input**: None (uses all active users automatically)
+    - **Processing**: Fetches recent emails from all users, parses content, concatenates with separators
+    - **Output**: JSON with concatenated email string, user/email counts, and error statistics
+    - **Separators**: Uses 80 asterisk characters (`*`) between each email for readability
 
 ## Code Style and Best Practices
 

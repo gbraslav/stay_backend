@@ -415,9 +415,9 @@ def get_sessions_status():
             'message': 'Internal server error'
         }), 500
 
-@api_bp.route('/check_priority', methods=['GET'])
-def check_priority():
-    """Check priority by getting last 10 emails from all users with access tokens
+@api_bp.route('/get_10_emails_concat', methods=['GET'])
+def get_10_emails_concat():
+    """Get last 10 emails from all users with access tokens and concatenate them
     ---
     tags:
       - Emails
@@ -571,164 +571,12 @@ def check_priority():
         }), 200
 
     except Exception as e:
-        logger.error(f"Error in check_priority: {str(e)}")
+        logger.error(f"Error in get_10_emails_concat: {str(e)}")
         return jsonify({
             'status': 'error',
             'message': 'Internal server error'
         }), 500
 
-@api_bp.route('/process_emails', methods=['POST'])
-def process_emails():
-    """Process emails for a user with LLM analysis
-    ---
-    tags:
-      - Emails
-    parameters:
-      - in: body
-        name: request_data
-        description: OAuth token and processing parameters
-        required: true
-        schema:
-          type: object
-          properties:
-            oauth_token:
-              $ref: '#/definitions/OAuthToken'
-            days_back:
-              type: integer
-              default: 7
-              example: 7
-              description: Number of days to look back
-            max_emails:
-              type: integer
-              default: 50
-              example: 50
-              description: Maximum number of emails to process
-          required:
-            - oauth_token
-    responses:
-      200:
-        description: Emails processed successfully
-        schema:
-          type: object
-          properties:
-            status:
-              type: string
-              example: success
-            message:
-              type: string
-              example: "Processed 25 emails"
-            processed_count:
-              type: integer
-              example: 25
-            total_fetched:
-              type: integer
-              example: 30
-            errors_count:
-              type: integer
-              example: 0
-            processed_emails:
-              type: array
-              items:
-                $ref: '#/definitions/EmailSummary'
-      400:
-        description: Invalid request or missing OAuth token
-        schema:
-          $ref: '#/definitions/ErrorResponse'
-      500:
-        description: Internal server error
-        schema:
-          $ref: '#/definitions/ErrorResponse'
-    """
-    try:
-
-        # Get request data
-        request_data = request.get_json()
-        
-        if not request_data or not request_data.get('oauth_token'):
-            return jsonify({
-                'status': 'error',
-                'message': 'OAuth token required'
-            }), 400
-        
-        # Get optional parameters
-        days_back = request_data.get('days_back', 7)
-        max_emails = request_data.get('max_emails', 50)
-        
-        # Create services
-        auth_service = GoogleAuthService()
-        credentials = auth_service.create_credentials_from_token(request_data['oauth_token'])
-        user_email = auth_service.get_user_email(credentials)
-        
-        if not user_email:
-            return jsonify({
-                'status': 'error',
-                'message': 'Unable to get user email'
-            }), 400
-        
-        gmail_service = GmailService(credentials)
-        email_parser = EmailParser()
-        llm_service = LLMService()
-        
-        # Fetch recent messages
-        messages = gmail_service.get_recent_messages(days=days_back, max_results=max_emails)
-        
-        processed_emails = []
-        errors = []
-        
-        for message in messages:
-            try:
-                # Parse email
-                parsed_email = email_parser.parse_gmail_message(message, user_email)
-                if not parsed_email:
-                    continue
-                
-                # Check if email already exists
-                existing_email = Email.query.get(parsed_email['id'])
-                if existing_email:
-                    continue
-                
-                # Analyze with LLM
-                analysis = llm_service.analyze_email(parsed_email)
-                
-                # Combine parsed data with analysis
-                email_data = {**parsed_email, **analysis}
-                
-                # Create Email object
-                email_obj = Email(**email_data)
-                db.session.add(email_obj)
-                
-                processed_emails.append(email_obj.to_summary_dict())
-                
-            except Exception as e:
-                logger.warning(f"Error processing message {message.get('id', 'unknown')}: {e}")
-                errors.append(f"Message {message.get('id', 'unknown')}: {str(e)}")
-        
-        # Commit to database
-        try:
-            db.session.commit()
-        except Exception as e:
-            db.session.rollback()
-            logger.error(f"Database commit error: {e}")
-            return jsonify({
-                'status': 'error',
-                'message': 'Failed to save processed emails'
-            }), 500
-        
-        return jsonify({
-            'status': 'success',
-            'message': f'Processed {len(processed_emails)} emails',
-            'processed_count': len(processed_emails),
-            'total_fetched': len(messages),
-            'errors_count': len(errors),
-            'processed_emails': processed_emails[:10]  # Return first 10 for preview
-        }), 200
-        
-    except Exception as e:
-        logger.error(f"Error in process_emails: {str(e)}")
-        return jsonify({
-            'status': 'error',
-            'message': 'Internal server error'
-        }), 500
 
 @api_bp.route('/emails', methods=['GET'])
 def get_emails():
@@ -1163,7 +1011,7 @@ def get_emails_summary():
 
 @api_bp.route('/process_single_email', methods=['POST'])
 def process_single_email():
-    """Process single email with ChatGPT using custom prompt
+    """Process single email with ChatGPT
     ---
     tags:
       - Emails
@@ -1177,7 +1025,6 @@ def process_single_email():
           required:
             - email_id
             - user_email
-            - prompt
           properties:
             email_id:
               type: string
@@ -1187,10 +1034,6 @@ def process_single_email():
               type: string
               description: User's Gmail address
               example: "user@gmail.com"
-            prompt:
-              type: string
-              description: Custom prompt for ChatGPT processing
-              example: "Summarize this email and identify any action items"
     responses:
       200:
         description: Email processed successfully
@@ -1203,10 +1046,30 @@ def process_single_email():
             email_id:
               type: string
               example: "1234567890abcdef"
-            response:
-              type: string
-              description: ChatGPT response
-              example: "This email is about..."
+            analysis:
+              type: object
+              description: Email analysis results
+              properties:
+                sentiment:
+                  type: string
+                  example: "neutral"
+                priority:
+                  type: string
+                  example: "medium"
+                category:
+                  type: string
+                  example: "work"
+                summary:
+                  type: string
+                  example: "Email summary here"
+                action_required:
+                  type: boolean
+                  example: false
+                key_points:
+                  type: array
+                  items:
+                    type: string
+                  example: ["Point 1", "Point 2"]
       400:
         description: Invalid request parameters
         schema:
@@ -1236,7 +1099,6 @@ def process_single_email():
 
         email_id = data.get('email_id')
         user_email = data.get('user_email')
-        prompt = data.get('prompt')
 
         # Validate required parameters
         if not email_id:
@@ -1249,12 +1111,6 @@ def process_single_email():
             return jsonify({
                 'status': 'error',
                 'message': 'user_email is required'
-            }), 400
-
-        if not prompt:
-            return jsonify({
-                'status': 'error',
-                'message': 'prompt is required'
             }), 400
 
         # Check if we have stored tokens for this user
@@ -1309,12 +1165,13 @@ Date: {parsed_email.get('date_received', 'Unknown Date')}
 {parsed_email.get('body_text', 'No content available')}
 """
 
-        # Send to ChatGPT
+        # Send to ChatGPT using default analysis
         llm_service = LLMService()
         try:
-            llm_response = llm_service.analyze_email_content(email_content, prompt)
+            # Use the default analyze_email method which doesn't require a custom prompt
+            llm_response = llm_service.analyze_email(parsed_email)
         except Exception as llm_error:
-            logger.error(f"LLM service error: {llm_error}")
+            logger.error(f'LLM service error: {llm_error}')
             return jsonify({
                 'status': 'error',
                 'message': 'Failed to process email with ChatGPT'
@@ -1323,7 +1180,7 @@ Date: {parsed_email.get('date_received', 'Unknown Date')}
         return jsonify({
             'status': 'success',
             'email_id': email_id,
-            'response': llm_response
+            'analysis': llm_response
         }), 200
 
     except Exception as e:
